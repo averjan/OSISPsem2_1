@@ -98,10 +98,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     static std::thread t;
     static std::atomic_bool cancellation_token;
     static UINT_PTR IDT_TIMER1;
+    static UINT_PTR IDT_TIMER2;
     static bool bouncingLaunched = false;
     BITMAP bitmapInfo;
     HBRUSH hbrWhite = (HBRUSH)GetStockObject(GRAY_BRUSH);
     static BitmapHandler* bmpHand = new BitmapHandler(hwnd, L"a3.bmp");
+    int speed = 5;
 
     doingNothing = false;
     switch (uMsg)
@@ -151,13 +153,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         // in the rectangle by adding 1 to the left and top
         // coordinates of the bitmap rectangle, and subtracting 2
         // from the right and bottom coordinates.
-
+        bmpHand->Draw();
+        /*
         BeginPaint(hwnd, &ps);
         TransparentBlt(ps.hdc, rcBmp.left + 1, rcBmp.top + 1,
             (rcBmp.right - rcBmp.left) - 2,
             (rcBmp.bottom - rcBmp.top) - 2, hdcCompat,
             0, 0, 128, 128, GetSysColor(COLOR_WINDOW));
         EndPaint(hwnd, &ps);
+        */
         break;
 
     case WM_ERASEBKGND:
@@ -199,19 +203,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         pt.x = (LONG)LOWORD(lParam);
         pt.y = (LONG)HIWORD(lParam);
 
+        
         // If the user has clicked the bitmap rectangle, redraw
         // it using the dotted pen. Set the fDragRect flag to
         // indicate that the user is about to drag the rectangle.
 
-        if (PtInRect(&rcBmp, pt))
+        if (bmpHand->PtInBmp(pt))
         {
+            fDragRect = TRUE;
+            /*
             hdc = GetDC(hwnd);
             SelectObject(hdc, transPen);
             Rectangle(hdc, rcBmp.left, rcBmp.top, rcBmp.right,
                 rcBmp.bottom);
             fDragRect = TRUE;
             ReleaseDC(hwnd, hdc);
+            */
         }
+        
 
         return 0;
 
@@ -231,7 +240,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         if ((wParam && MK_LBUTTON)
             && fDragRect)
         {
-
+            int offsetX = LOWORD(lParam) - pt.x;
+            int offsetY = HIWORD(lParam) - pt.y;
+            bmpHand->MoveRect(offsetX, offsetY);
+            pt.x = (LONG)LOWORD(lParam);
+            pt.y = (LONG)HIWORD(lParam);
+            RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
+            /*
             // Set the mix mode so that the pen color is the
             // inverse of the background color.
             int offsetX = LOWORD(lParam) - pt.x;
@@ -275,6 +290,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
             pt.x = (LONG)LOWORD(lParam);
             pt.y = (LONG)HIWORD(lParam);
+            */
         }
         return 0;
 
@@ -285,7 +301,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
             // Draw the bitmap rectangle, copy the bitmap into
             // it, and reset the fDragRect flag.
-
+            /*
             hdc = GetDC(hwnd);
             TransparentBlt(hdc, rcBmp.left + 1, rcBmp.top + 1,
                 (rcBmp.right - rcBmp.left) - 2,
@@ -293,6 +309,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 0, 0, 128, 128, GetSysColor(COLOR_WINDOW));
 
             ReleaseDC(hwnd, hdc);
+            */
             fDragRect = FALSE;
         }
 
@@ -307,6 +324,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         int direct = sgn(delta);
         int offset;
         if (key == MK_SHIFT) {
+            bmpHand->MoveRect(direct * speed, 0);
+            /*
             if ((direct < 0) && (rcBmp.left != 0))
             {
                 offset = (rcBmp.left > 5) ? 5 : rcBmp.left;
@@ -322,8 +341,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             }
 
             OffsetRect(&rcBmp, direct * offset, 0);
+            */
         }
         else {
+            bmpHand->MoveRect(0, direct * speed);
+            /*
             if ((direct < 0) && (rcBmp.top != 0))
             {
                 offset = (rcBmp.top > 5) ? 5 : rcBmp.top;
@@ -339,8 +361,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             }
 
             OffsetRect(&rcBmp, 0, direct * offset);
+            */
         }
 
+        /*
         hdc = GetDC(hwnd);
 
         SetROP2(hdc, R2_WHITE);
@@ -352,6 +376,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         // SwapBuffers(hdc);
 
         ReleaseDC(hwnd, hdc);
+        */
+
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
         return 0;
     }
 

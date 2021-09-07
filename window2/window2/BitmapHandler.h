@@ -12,16 +12,22 @@ private:
 	bool IsMovableBottom(int direct, RECT clientRect);
 	bool CalculatePossibleXOffset(int* offsetX);
 	bool CalculatePossibleYOffset(int* offsetY);
+
+	void SetAutoMoveDirections(int* offsetX, int* offsetY);
+
 public:
 	HWND parentHwnd;
 	HDC bmpContext;
 	HDC canvasHdc;
+	RECT usrRec;
 	int x, y;
 	int width, height;
 	int speed;
-	RECT usrRec;
+	double motionAngle;
+	const int step = 5;
 
 	BitmapHandler(HWND parentWindow, LPCWSTR fileName);
+	~BitmapHandler();
 
 	void Draw();
 
@@ -31,6 +37,10 @@ public:
 	*/
 	bool MoveRect(int offsetX, int offsetY);
 
-	bool AutoMoveRect();
+	void AutoMoveRect();
+
+	bool PtInBmp(POINT pt);
+
+	void GenerateMotionAngle();
 };
 

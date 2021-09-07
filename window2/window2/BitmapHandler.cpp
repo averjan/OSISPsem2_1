@@ -31,15 +31,9 @@ void BitmapHandler::Draw()
 
 bool BitmapHandler::MoveRect(int offsetX, int offsetY)
 {
-    if (!CalculatePossibleXOffset(&offsetX))
-    {
-        return false;
-    }
+    CalculatePossibleXOffset(&offsetX);
 
-    if (!CalculatePossibleYOffset(&offsetY))
-    {
-        return false;
-    }
+    CalculatePossibleYOffset(&offsetY);
 
     OffsetRect(&usrRec, offsetX, offsetY);
     return true;
@@ -47,17 +41,22 @@ bool BitmapHandler::MoveRect(int offsetX, int offsetY)
 
 bool BitmapHandler::CalculatePossibleXOffset(int* offsetX)
 {
+    if (*offsetX > 0)
+    {
+        int a = 12;
+    }
+
     int direct = sgn(*offsetX);
     RECT clientRect;
     GetClientRect(parentHwnd, &clientRect);
     if (IsMovableLeft(direct))
     {
-        *offsetX = (usrRec.left > speed) ? speed : usrRec.left;
+        *offsetX = (usrRec.left > abs(*offsetX)) ? *offsetX : direct * usrRec.left;
     }
     else if (IsMovableRight(direct, clientRect))
     {
         int rightOffset = clientRect.right - (usrRec.right + clientRect.left);
-        *offsetX = (rightOffset > speed) ? speed : rightOffset;
+        *offsetX = (rightOffset > *offsetX) ? *offsetX : rightOffset;
     }
     else
     {
@@ -74,12 +73,12 @@ bool BitmapHandler::CalculatePossibleYOffset(int* offsetY)
     GetClientRect(parentHwnd, &clientRect);
     if (IsMovableTop(direct))
     {
-        *offsetY = (usrRec.top > speed) ? speed : usrRec.top;
+        *offsetY = (usrRec.top > abs(*offsetY)) ? *offsetY : direct * usrRec.top;
     }
     else if (IsMovableBottom(direct, clientRect))
     {
         int bottomOffset = clientRect.bottom - (usrRec.bottom + clientRect.top);
-        *offsetY = (bottomOffset > speed) ? speed : bottomOffset;
+        *offsetY = (bottomOffset > *offsetY) ? *offsetY : bottomOffset;
     }
     else
     {
@@ -87,6 +86,11 @@ bool BitmapHandler::CalculatePossibleYOffset(int* offsetY)
     }
 
     return true;
+}
+
+bool BitmapHandler::PtInBmp(POINT pt)
+{
+    return PtInRect(&usrRec, pt);
 }
 
 bool BitmapHandler::IsMovableLeft(int direct)
@@ -107,4 +111,42 @@ bool BitmapHandler::IsMovableTop(int direct)
 bool BitmapHandler::IsMovableBottom(int direct, RECT clientRect)
 {
     return (direct > 0) && (usrRec.bottom + clientRect.top != clientRect.bottom);
+}
+
+BitmapHandler::~BitmapHandler()
+{
+    ReleaseDC(parentHwnd, bmpContext);
+    ReleaseDC(parentHwnd, canvasHdc);
+}
+
+void BitmapHandler::GenerateMotionAngle()
+{
+    this->motionAngle = (rand() % 360 + 1) * 3.14 / 180;
+}
+
+void BitmapHandler::AutoMoveRect()
+{
+    int offsetX = cos(motionAngle) * step;
+    int offsetY = sin(motionAngle) * step;
+    SetAutoMoveDirections(&offsetX, &offsetY);
+    CalculatePossibleXOffset(&offsetX);
+    CalculatePossibleYOffset(&offsetY);
+    OffsetRect(&usrRec, offsetX, offsetY);
+}
+
+void BitmapHandler::SetAutoMoveDirections(int* offsetX, int* offsetY)
+{
+    int directX = sgn(*offsetX);
+    int directY = sgn(*offsetY);
+    RECT clientRect;
+    GetClientRect(parentHwnd, &clientRect);
+    if (!IsMovableLeft(directX) || !IsMovableRight(directX, clientRect))
+    {
+        *offsetX = -*offsetX;
+    }
+
+    if (!IsMovableTop(directY) || !IsMovableBottom(directY, clientRect))
+    {
+        *offsetY = -*offsetY;
+    }
 }
