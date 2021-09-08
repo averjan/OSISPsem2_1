@@ -21,6 +21,7 @@ BitmapHandler::BitmapHandler(HWND parentWindow, LPCWSTR fileName)
     this->bmpContext = CreateCompatibleDC(this->canvasHdc);
     SelectObject(this->bmpContext, hbmp);
     SetRect(&(this->usrRec), x, y, x + width, y + height);
+    GenerateMotionAngle();
 }
 
 void BitmapHandler::Draw()
@@ -122,16 +123,16 @@ BitmapHandler::~BitmapHandler()
 void BitmapHandler::GenerateMotionAngle()
 {
     this->motionAngle = (rand() % 360 + 1) * 3.14 / 180;
+    speedX = cos(motionAngle) * step;
+    speedY = sin(motionAngle) * step;
 }
 
 void BitmapHandler::AutoMoveRect()
 {
-    int offsetX = cos(motionAngle) * step;
-    int offsetY = sin(motionAngle) * step;
-    SetAutoMoveDirections(&offsetX, &offsetY);
-    CalculatePossibleXOffset(&offsetX);
-    CalculatePossibleYOffset(&offsetY);
-    OffsetRect(&usrRec, offsetX, offsetY);
+    SetAutoMoveDirections(&speedX, &speedY);
+    CalculatePossibleXOffset(&speedX);
+    CalculatePossibleYOffset(&speedY);
+    OffsetRect(&usrRec, speedX, speedY);
 }
 
 void BitmapHandler::SetAutoMoveDirections(int* offsetX, int* offsetY)
@@ -140,13 +141,33 @@ void BitmapHandler::SetAutoMoveDirections(int* offsetX, int* offsetY)
     int directY = sgn(*offsetY);
     RECT clientRect;
     GetClientRect(parentHwnd, &clientRect);
-    if (!IsMovableLeft(directX) || !IsMovableRight(directX, clientRect))
+    if (IsLeftHit(directX) || IsRightHit(directX, clientRect))
     {
         *offsetX = -*offsetX;
     }
 
-    if (!IsMovableTop(directY) || !IsMovableBottom(directY, clientRect))
+    if (IsTopHit(directY) || IsBottomHit(directY, clientRect))
     {
         *offsetY = -*offsetY;
     }
+}
+
+bool BitmapHandler::IsLeftHit(int direct)
+{
+    return (direct < 0) && (usrRec.left == 0);
+}
+
+bool BitmapHandler::IsRightHit(int direct, RECT clientRect)
+{
+    return (direct > 0) && (usrRec.right + clientRect.left == clientRect.right);
+}
+
+bool BitmapHandler::IsTopHit(int direct)
+{
+    return (direct < 0) && (usrRec.top == 0);
+}
+
+bool BitmapHandler::IsBottomHit(int direct, RECT clientRect)
+{
+    return (direct > 0) && (usrRec.bottom + clientRect.top == clientRect.bottom);
 }

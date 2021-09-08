@@ -11,6 +11,7 @@
 
 
 const double M_PI = 3.14;
+static UINT_PTR IDT_TIMER1 = 1001;
 
 bool doingNothing = false;
 HWND globalHwnd;
@@ -64,12 +65,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     // Run the message loop.
 
     MSG msg = { };
-    DWORD baseTime = GetTickCount64();
     while (GetMessage(&msg, NULL, 0, 0))
     {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
-
     }
 
     return 0;
@@ -97,8 +96,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     static int height;
     static std::thread t;
     static std::atomic_bool cancellation_token;
-    static UINT_PTR IDT_TIMER1;
-    static UINT_PTR IDT_TIMER2;
+    static UINT_PTR IDT_TIMER2 = 1;
     static bool bouncingLaunched = false;
     BITMAP bitmapInfo;
     HBRUSH hbrWhite = (HBRUSH)GetStockObject(GRAY_BRUSH);
@@ -108,323 +106,230 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     doingNothing = false;
     switch (uMsg)
     {
-    case WM_CREATE: {
-        globalHwnd = hwnd;
-        SetTimer(hwnd, IDT_TIMER1, 5000, (TIMERPROC)NULL);
-        // Load the bitmap resource.
-        HBITMAP hbmp = (HBITMAP)LoadImage(NULL, L"a3.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+        case WM_CREATE: {
 
-        hdc = GetDC(hwnd);
-        hdcCompat = CreateCompatibleDC(hdc);
-        SelectObject(hdcCompat, hbmp);
-        // Create a brush of the same color as the background
-        // of the client area. The brush is used later to erase
-        // the old bitmap before copying the bitmap into the
-        // target rectangle.
 
-        crBkgnd = GetBkColor(hdc);
-        hbrBkgnd = CreateSolidBrush(crBkgnd);
-        ReleaseDC(hwnd, hdc);
-
-        // Create a dotted pen. The pen is used to draw the
-        // bitmap rectangle as the user drags it.
-
-        hpenDot = CreatePen(PS_DOT, 1, RGB(0, 0, 0));
-        transPen = CreatePen(PS_NULL, 0, RGB(0, 0, 0));
-        // Set the initial rectangle for the bitmap. Note that
-        // this application supports only a 32- by 32-pixel
-        // bitmap. The rectangle is slightly larger than the
-        // bitmap.
-
-        GetClientRect(hwnd, &rcClient);
-        ptClientUL.x = rcClient.left;
-        ptClientUL.y = rcClient.top;
-        ptClientLR.x = rcClient.right;
-        ptClientLR.y = rcClient.bottom;
-
-        SetRect(&rcBmp, 1, 1, 130, 130);
-        return 0;
-    }
-
-    case WM_PAINT:
-
-        // Draw the bitmap rectangle and copy the bitmap into
-        // it. The 32-pixel by 32-pixel bitmap is centered
-        // in the rectangle by adding 1 to the left and top
-        // coordinates of the bitmap rectangle, and subtracting 2
-        // from the right and bottom coordinates.
-        bmpHand->Draw();
-        /*
-        BeginPaint(hwnd, &ps);
-        TransparentBlt(ps.hdc, rcBmp.left + 1, rcBmp.top + 1,
-            (rcBmp.right - rcBmp.left) - 2,
-            (rcBmp.bottom - rcBmp.top) - 2, hdcCompat,
-            0, 0, 128, 128, GetSysColor(COLOR_WINDOW));
-        EndPaint(hwnd, &ps);
-        */
-        break;
-
-    case WM_ERASEBKGND:
-        hdc = (HDC)wParam;
-        SetMapMode(hdc, MM_ANISOTROPIC);
-        SetWindowExtEx(hdc, 100, 100, NULL);
-        SetViewportExtEx(hdc, rcClient.right, rcClient.bottom, NULL);
-        FillRect(hdc, &rcClient, hbrWhite);
-        return 1L;
-
-    case WM_MOVE:
-    case WM_SIZE:
-
-        // Convert the client coordinates of the client-area
-        // rectangle to screen coordinates and save them in a
-        // rectangle. The rectangle is passed to the ClipCursor
-        // function during WM_LBUTTONDOWN processing.
-
-        GetClientRect(hwnd, &rcClient);
-        ptClientUL.x = rcClient.left;
-        ptClientUL.y = rcClient.top;
-        ptClientLR.x = rcClient.right;
-        ptClientLR.y = rcClient.bottom;
-        ClientToScreen(hwnd, &ptClientUL);
-        ClientToScreen(hwnd, &ptClientLR);
-        SetRect(&rcClient, ptClientUL.x, ptClientUL.y,
-            ptClientLR.x, ptClientLR.y);
-        return 0;
-
-    case WM_LBUTTONDOWN:
-
-        // Restrict the mouse cursor to the client area. This
-        // ensures that the window receives a matching
-        // WM_LBUTTONUP message.
-
-        ClipCursor(&rcClient);
-        // Save the coordinates of the mouse cursor.
-
-        pt.x = (LONG)LOWORD(lParam);
-        pt.y = (LONG)HIWORD(lParam);
-
-        
-        // If the user has clicked the bitmap rectangle, redraw
-        // it using the dotted pen. Set the fDragRect flag to
-        // indicate that the user is about to drag the rectangle.
-
-        if (bmpHand->PtInBmp(pt))
-        {
-            fDragRect = TRUE;
-            /*
-            hdc = GetDC(hwnd);
-            SelectObject(hdc, transPen);
-            Rectangle(hdc, rcBmp.left, rcBmp.top, rcBmp.right,
-                rcBmp.bottom);
-            fDragRect = TRUE;
-            ReleaseDC(hwnd, hdc);
-            */
-        }
-        
-
-        return 0;
-
-    case WM_MOUSEMOVE:
-
-        if (bouncingLaunched)
-        {
-            cancellation_token = true;
-            t.join();
-            bouncingLaunched = false;
-        }
-
-        SetTimer(hwnd, IDT_TIMER1, 5000, (TIMERPROC)NULL);
-        // Draw a target rectangle or drag the bitmap rectangle,
-        // depending on the status of the fDragRect flag.
-
-        if ((wParam && MK_LBUTTON)
-            && fDragRect)
-        {
-            int offsetX = LOWORD(lParam) - pt.x;
-            int offsetY = HIWORD(lParam) - pt.y;
-            bmpHand->MoveRect(offsetX, offsetY);
-            pt.x = (LONG)LOWORD(lParam);
-            pt.y = (LONG)HIWORD(lParam);
-            RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
-            /*
-            // Set the mix mode so that the pen color is the
-            // inverse of the background color.
-            int offsetX = LOWORD(lParam) - pt.x;
-            int offsetY = HIWORD(lParam) - pt.y;
-            if (((sgn(offsetY) < 0) && (rcBmp.top + offsetY < 0))
-                || ((sgn(offsetY) > 0) && (rcBmp.bottom + ptClientUL.y + offsetY > ptClientLR.y)))
-            {
-                return 0;
-            }
-
-            if (((sgn(offsetX) < 0) && (rcBmp.left + offsetX < 0))
-                || ((sgn(offsetX) > 0) && (rcBmp.right + ptClientUL.x + offsetX > ptClientLR.x)))
-            {
-                return 0;
-            }
+            // Load the bitmap resource.
+            HBITMAP hbmp = (HBITMAP)LoadImage(NULL, L"a3.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
 
             hdc = GetDC(hwnd);
-            SetROP2(hdc, R2_WHITE);
+            hdcCompat = CreateCompatibleDC(hdc);
+            SelectObject(hdcCompat, hbmp);
+            // Create a brush of the same color as the background
+            // of the client area. The brush is used later to erase
+            // the old bitmap before copying the bitmap into the
+            // target rectangle.
 
-            // Select the dotted pen into the DC and erase
-            // the previous bitmap rectangle by drawing
-            // another rectangle on top of it.
-
-            SelectObject(hdc, transPen);
-            Rectangle(hdc, rcBmp.left, rcBmp.top,
-                rcBmp.right, rcBmp.bottom);
-
-            // Set the new coordinates of the bitmap rectangle,
-            // then redraw it.
-
-            OffsetRect(&rcBmp, LOWORD(lParam) - pt.x,
-                HIWORD(lParam) - pt.y);
-            TransparentBlt(hdc, rcBmp.left + 1, rcBmp.top + 1,
-                (rcBmp.right - rcBmp.left) - 2,
-                (rcBmp.bottom - rcBmp.top) - 2, hdcCompat,
-                0, 0, 128, 128, GetSysColor(COLOR_WINDOW));
-            //SwapBuffers(hdc);
+            crBkgnd = GetBkColor(hdc);
+            hbrBkgnd = CreateSolidBrush(crBkgnd);
             ReleaseDC(hwnd, hdc);
 
+            // Create a dotted pen. The pen is used to draw the
+            // bitmap rectangle as the user drags it.
+
+            hpenDot = CreatePen(PS_DOT, 1, RGB(0, 0, 0));
+            transPen = CreatePen(PS_NULL, 0, RGB(0, 0, 0));
+            // Set the initial rectangle for the bitmap. Note that
+            // this application supports only a 32- by 32-pixel
+            // bitmap. The rectangle is slightly larger than the
+            // bitmap.
+
+            GetClientRect(hwnd, &rcClient);
+            ptClientUL.x = rcClient.left;
+            ptClientUL.y = rcClient.top;
+            ptClientLR.x = rcClient.right;
+            ptClientLR.y = rcClient.bottom;
+
+            SetRect(&rcBmp, 1, 1, 130, 130);
+
+            SetTimer(hwnd, IDT_TIMER1, 5000, (TIMERPROC)NULL);
+
+            return 0;
+        }
+
+        case WM_TIMER:
+        {
+            int a;
+            if (wParam == IDT_TIMER1)
+            {
+                if (!bouncingLaunched)
+                {
+                    bmpHand->GenerateMotionAngle();
+                    SetTimer(hwnd, IDT_TIMER2, 50, (TIMERPROC)NULL);
+                    bouncingLaunched = true;
+                    /*
+                    cancellation_token = false;
+                    bouncingLaunched = true;
+                    RECT r;
+                    r.left = ptClientUL.x;
+                    r.top = ptClientUL.y;
+                    r.right = ptClientLR.x;
+                    r.bottom = ptClientLR.y;
+                    t = std::thread(MovePicture, hwnd, &rcBmp, r, hdcCompat, &cancellation_token);
+                    */
+                }
+            }
+            
+            else if (wParam == IDT_TIMER2)
+            {
+                bmpHand->AutoMoveRect();
+                RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
+            }
+            
+            return 0;
+        }
+
+        case WM_PAINT:
+        {
+            // Draw the bitmap rectangle and copy the bitmap into
+            // it. The 32-pixel by 32-pixel bitmap is centered
+            // in the rectangle by adding 1 to the left and top
+            // coordinates of the bitmap rectangle, and subtracting 2
+            // from the right and bottom coordinates.
+
+            BeginPaint(hwnd, &ps);
+            FillRect(ps.hdc, &ps.rcPaint, hbrWhite);
+            bmpHand->Draw();
+            EndPaint(hwnd, &ps);
+            break;
+        }
+        
+        case WM_ERASEBKGND: {
+            hdc = (HDC)wParam;
+            SetMapMode(hdc, MM_ANISOTROPIC);
+            SetWindowExtEx(hdc, 100, 100, NULL);
+            SetViewportExtEx(hdc, rcClient.right, rcClient.bottom, NULL);
+            FillRect(hdc, &rcClient, hbrWhite);
+            return 0;
+        }
+        
+        case WM_MOVE:
+        case WM_SIZE:
+        {
+            // Convert the client coordinates of the client-area
+            // rectangle to screen coordinates and save them in a
+            // rectangle. The rectangle is passed to the ClipCursor
+            // function during WM_LBUTTONDOWN processing.
+
+            GetClientRect(hwnd, &rcClient);
+            ptClientUL.x = rcClient.left;
+            ptClientUL.y = rcClient.top;
+            ptClientLR.x = rcClient.right;
+            ptClientLR.y = rcClient.bottom;
+            ClientToScreen(hwnd, &ptClientUL);
+            ClientToScreen(hwnd, &ptClientLR);
+            SetRect(&rcClient, ptClientUL.x, ptClientUL.y,
+                ptClientLR.x, ptClientLR.y);
+            return 0;
+        }
+
+        case WM_LBUTTONDOWN: {
+
+            // Restrict the mouse cursor to the client area. This
+            // ensures that the window receives a matching
+            // WM_LBUTTONUP message.
+
+            ClipCursor(&rcClient);
             // Save the coordinates of the mouse cursor.
 
             pt.x = (LONG)LOWORD(lParam);
             pt.y = (LONG)HIWORD(lParam);
-            */
+
+
+            // If the user has clicked the bitmap rectangle, redraw
+            // it using the dotted pen. Set the fDragRect flag to
+            // indicate that the user is about to drag the rectangle.
+
+            if (bmpHand->PtInBmp(pt))
+            {
+                fDragRect = TRUE;
+            }
+
+
+            return 0;
         }
-        return 0;
 
-    case WM_LBUTTONUP:
+        case WM_MOUSEMOVE: {
 
-        if (fDragRect)
+            if (bouncingLaunched)
+            {
+                KillTimer(hwnd, IDT_TIMER2);
+                bouncingLaunched = false;
+            }
+
+            SetTimer(hwnd, IDT_TIMER1, 5000, (TIMERPROC)NULL);
+
+            // Draw a target rectangle or drag the bitmap rectangle,
+            // depending on the status of the fDragRect flag.
+
+            if ((wParam && MK_LBUTTON)
+                && fDragRect)
+            {
+                int offsetX = LOWORD(lParam) - pt.x;
+                int offsetY = HIWORD(lParam) - pt.y;
+                bmpHand->MoveRect(offsetX, offsetY);
+                pt.x = (LONG)LOWORD(lParam);
+                pt.y = (LONG)HIWORD(lParam);
+                RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
+            }
+            return 0;
+        }
+
+        case WM_LBUTTONUP: {
+
+            if (fDragRect)
+            {
+                fDragRect = FALSE;
+            }
+
+            // Release the mouse cursor.
+
+            ClipCursor((LPRECT)NULL);
+            return 0;
+        }
+
+        case WM_MOUSEWHEEL: {
+            if (bouncingLaunched)
+            {
+                KillTimer(hwnd, IDT_TIMER2);
+                bouncingLaunched = false;
+            }
+
+            auto delta = (short)HIWORD(wParam);
+            auto key = (short)LOWORD(wParam);
+            int direct = sgn(delta);
+            if (key == MK_SHIFT) {
+                bmpHand->MoveRect(direct * speed, 0);
+                RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
+            }
+            else {
+                bmpHand->MoveRect(0, direct * speed);
+                RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
+            }
+            return 0;
+        }
+
+        case WM_DESTROY:
         {
+            if (bouncingLaunched)
+            {
+                KillTimer(hwnd, IDT_TIMER2);
+            }
 
-            // Draw the bitmap rectangle, copy the bitmap into
-            // it, and reset the fDragRect flag.
-            /*
-            hdc = GetDC(hwnd);
-            TransparentBlt(hdc, rcBmp.left + 1, rcBmp.top + 1,
-                (rcBmp.right - rcBmp.left) - 2,
-                (rcBmp.bottom - rcBmp.top) - 2, hdcCompat,
-                0, 0, 128, 128, GetSysColor(COLOR_WINDOW));
-
-            ReleaseDC(hwnd, hdc);
-            */
-            fDragRect = FALSE;
+            delete bmpHand;
+            KillTimer(hwnd, IDT_TIMER1);
+            DeleteObject(hbrBkgnd);
+            DeleteDC(hdcCompat);
+            DeleteObject(hbmp);
+            PostQuitMessage(0);
+            break;
         }
-
-        // Release the mouse cursor.
-
-        ClipCursor((LPRECT)NULL);
-        return 0;
-
-    case WM_MOUSEWHEEL: {
-        auto delta = (short)HIWORD(wParam);
-        auto key = (short)LOWORD(wParam);
-        int direct = sgn(delta);
-        int offset;
-        if (key == MK_SHIFT) {
-            bmpHand->MoveRect(direct * speed, 0);
-            /*
-            if ((direct < 0) && (rcBmp.left != 0))
-            {
-                offset = (rcBmp.left > 5) ? 5 : rcBmp.left;
-            }
-            else if ((direct > 0) && (rcBmp.right + ptClientUL.x != ptClientLR.x))
-            {
-                int rightOffset = ptClientLR.x - (rcBmp.right + ptClientUL.x);
-                offset = (ptClientLR.x - (rcBmp.right + ptClientUL.x) > 5) ? 5 : rightOffset;
-            }
-            else
-            {
-                return 0;
-            }
-
-            OffsetRect(&rcBmp, direct * offset, 0);
-            */
+        default:
+        {
+            return DefWindowProc(hwnd, uMsg, wParam, lParam);
         }
-        else {
-            bmpHand->MoveRect(0, direct * speed);
-            /*
-            if ((direct < 0) && (rcBmp.top != 0))
-            {
-                offset = (rcBmp.top > 5) ? 5 : rcBmp.top;
-            }
-            else if ((direct > 0) && (rcBmp.bottom + ptClientUL.y != ptClientLR.y))
-            {
-                int bottomOffset = ptClientLR.y - (rcBmp.bottom + ptClientUL.y);
-                offset = (bottomOffset > 5) ? 5 : bottomOffset;
-            }
-            else
-            {
-                return 0;
-            }
-
-            OffsetRect(&rcBmp, 0, direct * offset);
-            */
-        }
-
-        /*
-        hdc = GetDC(hwnd);
-
-        SetROP2(hdc, R2_WHITE);
-        Rectangle(hdc, rcBmp.left, rcBmp.top, rcBmp.right, rcBmp.bottom);
-        TransparentBlt(hdc, rcBmp.left + 1, rcBmp.top + 1,
-            (rcBmp.right - rcBmp.left) - 2,
-            (rcBmp.bottom - rcBmp.top) - 2, hdcCompat,
-            0, 0, 128, 128, GetSysColor(COLOR_WINDOW));
-        // SwapBuffers(hdc);
-
-        ReleaseDC(hwnd, hdc);
-        */
-
-        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE);
-        return 0;
     }
 
-    case WM_TIMER:
-    {
-        if (wParam == IDT_TIMER1)
-        {
-            if (!bouncingLaunched)
-            {
-                cancellation_token = false;
-                bouncingLaunched = true;
-                RECT r;
-                r.left = ptClientUL.x;
-                r.top = ptClientUL.y;
-                r.right = ptClientLR.x;
-                r.bottom = ptClientLR.y;
-                t = std::thread(MovePicture, hwnd, &rcBmp, r, hdcCompat, &cancellation_token);
-            }
-        }
-
-        return 0;
-    }
-
-    case WM_DESTROY:
-
-        // Destroy the background brush, compatible bitmap,
-        // and the bitmap.
-        if (bouncingLaunched)
-        {
-            cancellation_token = true;
-            t.join();
-            bouncingLaunched = false;
-        }
-
-        delete bmpHand;
-        KillTimer(hwnd, IDT_TIMER1);
-        DeleteObject(hbrBkgnd);
-        DeleteDC(hdcCompat);
-        DeleteObject(hbmp);
-        PostQuitMessage(0);
-        break;
-
-    default:
-        doingNothing = true;
-        return DefWindowProc(hwnd, uMsg, wParam, lParam);
-    }
     return (LRESULT)NULL;
 }
 

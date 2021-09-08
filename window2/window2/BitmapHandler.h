@@ -10,6 +10,10 @@ private:
 	bool IsMovableRight(int direct, RECT clientRect);
 	bool IsMovableTop(int direct);
 	bool IsMovableBottom(int direct, RECT clientRect);
+	bool IsLeftHit(int direct);
+	bool IsRightHit(int direct, RECT clientRect);
+	bool IsTopHit(int direct);
+	bool IsBottomHit(int direct, RECT clientRect);
 	bool CalculatePossibleXOffset(int* offsetX);
 	bool CalculatePossibleYOffset(int* offsetY);
 
@@ -25,6 +29,7 @@ public:
 	int speed;
 	double motionAngle;
 	const int step = 5;
+	int speedX, speedY;
 
 	BitmapHandler(HWND parentWindow, LPCWSTR fileName);
 	~BitmapHandler();
