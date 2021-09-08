@@ -76,7 +76,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     static UINT_PTR IDT_TIMER1 = 1001;
     static bool bouncingLaunched = false;
     HBRUSH hbrWhite = (HBRUSH)GetStockObject(GRAY_BRUSH);
-    static BitmapHandler* bmpHand = new BitmapHandler(hwnd, L"a3.bmp");
+    static BitmapHandler* bmpHand = new BitmapHandler(hwnd, L"b4.bmp");
     int speed = 5;
     static RECT rcClient;
     switch (uMsg)
